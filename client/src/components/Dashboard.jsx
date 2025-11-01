@@ -2,142 +2,167 @@ import { useState, useEffect } from 'react';
 import { MapPin, TrendingUp, Users, Briefcase, Calendar, IndianRupee, Clock, CheckCircle, AlertCircle, Info } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { formatNumber } from '../utils/formatters';
-import { statesData, translations } from '../utils/constants';
+import { fin_year, statesData, translations } from '../utils/constants';
 import MetricCard from './MetricCard';
+import axios from "axios";
+import { useLanguage } from '../context/languageContext';
 
 
 const MGNREGADashboard = () => {
    const [selectedState, setSelectedState] = useState('');
    const [selectedDistrict, setSelectedDistrict] = useState('');
+   const [selectedFinYear, setSelectedFinYear] = useState('');
    const [loading, setLoading] = useState(false);
    const [districtData, setDistrictData] = useState(null);
    const [historicalData, setHistoricalData] = useState([]);
-   const [userLocation, setUserLocation] = useState(null);
    const [error, setError] = useState(null);
-   const [language, setLanguage] = useState('en');
-
+   const { language } = useLanguage();
    const t = translations[language];
 
-   // Mock data generator (in production, this fetches from your backend)
-   const generateMockData = (district, state) => {
-      return {
-         district_name: district,
-         state_name: state,
-         fin_year: '2024-25',
-         total_workers: Math.floor(Math.random() * 50000) + 10000,
-         households_benefited: Math.floor(Math.random() * 30000) + 5000,
-         person_days: Math.floor(Math.random() * 1000000) + 500000,
-         total_expenditure: Math.floor(Math.random() * 500) + 100,
-         avg_wage_per_day: Math.floor(Math.random() * 100) + 200,
-         work_completion_rate: Math.floor(Math.random() * 40) + 60,
-         active_works: Math.floor(Math.random() * 500) + 100,
-         completed_works: Math.floor(Math.random() * 800) + 200
-      };
-   };
-
-   const generateHistoricalData = () => {
-      const months = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'];
-      return months.map(month => ({
-         month,
-         workers: Math.floor(Math.random() * 10000) + 5000,
-         expenditure: Math.floor(Math.random() * 100) + 50,
-         workDays: Math.floor(Math.random() * 200000) + 100000
-      }));
-   };
-
-   // Detect user location
+   // Fetch API data
    useEffect(() => {
-      if ('geolocation' in navigator) {
-         navigator.geolocation.getCurrentPosition(
-            (position) => {
-               setUserLocation({
-                  lat: position.coords.latitude,
-                  lng: position.coords.longitude
+      const fetchData = async () => {
+         if (!selectedState || !selectedFinYear) return;
+
+         try {
+            setLoading(true);
+            setError("");
+
+            const response = await axios.get(
+               "https://api.data.gov.in/resource/ee03643a-ee4c-48c2-ac30-9f2ff26ab722",
+               {
+                  params: {
+                     "api-key": import.meta.env.VITE_API_KEY,
+                     format: "json",
+                     limit: 1000,
+                     "filters[state_name]": selectedState,
+                     "filters[fin_year]": selectedFinYear,
+                  },
+               }
+            );
+
+            const records = response.data.records || [];
+            // Match selected district
+            const districtRecord = records.find(
+               (r) => r.district_name?.toUpperCase() === selectedDistrict?.toUpperCase()
+            );
+
+            if (districtRecord) {
+               setDistrictData({
+                  total_workers: Number(districtRecord.Total_No_of_Workers) || 0,
+                  households_benefited: Number(districtRecord.Total_Households_Worked) || 0,
+                  person_days: Number(districtRecord.Average_days_of_employment_provided_per_Household) || 0,
+                  total_expenditure: Number(districtRecord.Total_Exp) || 0,
+                  avg_wage_per_day: Number(districtRecord.Average_Wage_rate_per_day_per_person) || 0,
+                  work_completion_rate: Math.round(
+                     (Number(districtRecord.Number_of_Completed_Works) /
+                        Number(districtRecord.Total_No_of_Works_Takenup || 1)) * 100
+                  ),
+                  active_works: Number(districtRecord.Number_of_Ongoing_Works) || 0,
+                  completed_works: Number(districtRecord.Number_of_Completed_Works) || 0,
                });
-            },
-            (error) => {
-               console.log(error, 'Location access denied');
+            } else {
+               setDistrictData(null);
+               setError("No data found for this district.");
             }
-         );
-      }
-   }, []);
 
-   const handleAutoDetect = async () => {
-      if (!userLocation) {
-         alert('Please enable location access in your browser');
-         return;
-      }
+            // Prepare historical chart (if monthly data is present)
+            const trend = records
+               .filter(r => r.district_name?.toUpperCase() === selectedDistrict?.toUpperCase())
+               .map(r => ({
+                  month: r.month,
+                  workers: Number(r.Total_Individuals_Worked) || 0
+               }));
+            setHistoricalData(trend);
 
-      setLoading(true);
-      // In production, use reverse geocoding API to get district from coordinates
-      // Mock implementation for demo
-      setTimeout(() => {
-         setSelectedState('BIHAR');
-         setSelectedDistrict('Muzaffarpur');
-         fetchDistrictData('Muzaffarpur', 'BIHAR');
-      }, 1000);
-   };
+         } catch (err) {
+            console.error("API Fetch Error:", err);
+            setError("Failed to fetch data. Please check your inputs or server.");
+         } finally {
+            setLoading(false);
+         }
+      };
 
-   const fetchDistrictData = async (district, state) => {
-      setLoading(true);
-      setError(null);
+      fetchData();
+   }, [selectedState, selectedFinYear, selectedDistrict]);
 
+   // IP-based location fallback
+   const getLocationFromIP = async () => {
       try {
-         // In production, this calls your backend API
-         // Backend should cache data, handle rate limiting, and fetch from data.gov.in
-         await new Promise(resolve => setTimeout(resolve, 1000));
+         const response = await fetch('https://ipapi.co/json/');
+         const data = await response.json();
+         const state = data.region?.toUpperCase() || '';
+         const district = data.city?.toUpperCase() || data.district?.toUpperCase() || '';
 
-         const data = generateMockData(district, state);
-         const historical = generateHistoricalData();
-
-         setDistrictData(data);
-         setHistoricalData(historical);
-      } catch (err) {
-         setError('Failed to load data. Please try again.');
+         if (state && district) {
+            setSelectedState(state);
+            setSelectedDistrict(district);
+            setSelectedFinYear('2025-2026');
+         } else {
+            alert('Unable to detect location from IP.');
+         }
+      } catch (error) {
+         console.error('IP location error:', error);
+         alert('Unable to detect location. Please allow location access.');
       } finally {
          setLoading(false);
       }
    };
 
-   useEffect(() => {
-      if (selectedDistrict && selectedState) {
-         fetchDistrictData(selectedDistrict, selectedState);
+   // Auto detect with GPS
+   const handleAutoDetect = async () => {
+      setLoading(true);
+      try {
+         if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+               async (position) => {
+                  const { latitude, longitude } = position.coords;
+
+                  const response = await fetch(
+                     `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+                  );
+                  const data = await response.json();
+
+                  const state = data?.address?.state?.toUpperCase() || '';
+                  const district =
+                     data?.address?.county ||
+                     data?.address?.city ||
+                     data?.address?.state_district ||
+                     '';
+
+                  if (state && district) {
+                     setSelectedState(state);
+                     setSelectedDistrict(district.toUpperCase());
+                     setSelectedFinYear('2025-2026');
+                  } else {
+                     alert('Unable to detect your district automatically.');
+                  }
+
+                  setLoading(false);
+               },
+               async (error) => {
+                  console.warn('Geolocation error:', error);
+                  await getLocationFromIP();
+               },
+               { enableHighAccuracy: true, timeout: 10000 }
+            );
+         } else {
+            await getLocationFromIP();
+         }
+      } catch (error) {
+         console.error('Auto-detect error:', error);
+         alert('Something went wrong while detecting location.');
+         setLoading(false);
       }
-   }, [selectedDistrict, selectedState]);
+   };
 
 
-
-   if (!selectedState || !selectedDistrict) {
+   if (!selectedState || !selectedDistrict || !selectedFinYear) {
       return (
+
          <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-green-50">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-orange-500 to-green-600 text-white shadow-lg">
-               <div className="max-w-7xl mx-auto px-4 py-6">
-                  <div className="flex items-center justify-between">
-                     <div className="flex items-center space-x-3">
-                        <img src="https://upload.wikimedia.org/wikipedia/commons/5/55/Emblem_of_India.svg" alt="Emblem" className="w-12 h-12 bg-white rounded-full p-1" />
-                        <div>
-                           <h1 className="text-2xl md:text-3xl font-bold">{t.title}</h1>
-                           <p className="text-orange-100 text-sm">{t.subtitle}</p>
-                        </div>
-                     </div>
-                     <div className="flex gap-2">
-                        <button
-                           onClick={() => setLanguage('en')}
-                           className={`px-3 py-1 rounded ${language === 'en' ? 'bg-white text-orange-600' : 'bg-orange-600 text-white'}`}
-                        >
-                           EN
-                        </button>
-                        <button
-                           onClick={() => setLanguage('hi')}
-                           className={`px-3 py-1 rounded ${language === 'hi' ? 'bg-white text-orange-600' : 'bg-orange-600 text-white'}`}
-                        >
-                           हिं
-                        </button>
-                     </div>
-                  </div>
-               </div>
-            </div>
+
+            {/* <Header /> */}
 
             {/* Selection Screen */}
             <div className="max-w-4xl mx-auto px-4 py-12">
@@ -194,6 +219,25 @@ const MGNREGADashboard = () => {
                         </div>
                      )}
 
+                     {/* Financial Year Selection */}
+                     {selectedState && (
+                        <div>
+                           <label className="block text-lg font-semibold text-gray-700 mb-3">
+                              {t.selectFinYear}
+                           </label>
+                           <select
+                              value={selectedFinYear}
+                              onChange={(e) => setSelectedFinYear(e.target.value)}
+                              className="w-full px-4 py-4 text-lg border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                           >
+                              <option value="">{language === 'en' ? 'Choose District' : 'जिला चुनें'}</option>
+                              {fin_year.map(year => (
+                                 <option key={year} value={year}>{year}</option>
+                              ))}
+                           </select>
+                        </div>
+                     )}
+
                      {/* Auto Detect */}
                      <div className="text-center">
                         <p className="text-gray-500 mb-4">{t.or}</p>
@@ -209,7 +253,8 @@ const MGNREGADashboard = () => {
                </div>
 
                {/* Info Cards */}
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+              
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-32">
                   <div className="bg-orange-100 rounded-xl p-6 text-center">
                      <Users className="w-12 h-12 text-orange-600 mx-auto mb-3" />
                      <h3 className="font-bold text-gray-900 mb-2">
@@ -243,10 +288,7 @@ const MGNREGADashboard = () => {
       );
    }
 
-   // While loading OR if district data is not yet available, show loader.
-   // This prevents a render crash when selectedState/selectedDistrict are set
-   // but `districtData` is still null (effect runs after render).
-   if (loading || !districtData) {
+   if (loading) {
       return (
          <div className="min-h-screen bg-gradient-to-br from-orange-50 to-green-50 flex items-center justify-center">
             <div className="text-center">
@@ -264,10 +306,9 @@ const MGNREGADashboard = () => {
             <div className="max-w-7xl mx-auto px-4 py-4">
                <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                     <img src="https://upload.wikimedia.org/wikipedia/commons/5/55/Emblem_of_India.svg" alt="Emblem" className="w-10 h-10 bg-white rounded-full p-1" />
                      <div>
                         <h1 className="text-xl md:text-2xl font-bold">{selectedDistrict}, {selectedState}</h1>
-                        <p className="text-orange-100 text-xs">FY 2024-25</p>
+                        <p className="text-orange-100 text-m flex justify-start">FY: {selectedFinYear}</p>
                      </div>
                   </div>
                   <button
@@ -282,154 +323,149 @@ const MGNREGADashboard = () => {
                   </button>
                </div>
             </div>
-         </div>
 
+         </div>
          {/* Main Content */}
-         <div className="max-w-7xl mx-auto px-4 py-8">
-            {/* Key Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-               <MetricCard
-                  icon={Users}
-                  label={t.workers}
-                  value={formatNumber(districtData?.total_workers ?? 0)}
-                  color="bg-gradient-to-br from-blue-500 to-blue-600"
-                  trend={12}
-                  info="Number of workers who got employment"
-               />
-               <MetricCard
-                  icon={Briefcase}
-                  label={t.households}
-                  value={formatNumber(districtData?.households_benefited ?? 0)}
-                  color="bg-gradient-to-br from-purple-500 to-purple-600"
-                  trend={8}
-                  info="Families who benefited from MGNREGA"
-               />
-               <MetricCard
-                  icon={Calendar}
-                  label={t.workDays}
-                  value={formatNumber(districtData?.person_days ?? 0)}
-                  color="bg-gradient-to-br from-green-500 to-green-600"
-                  trend={15}
-                  info="Total work days provided"
-               />
-               <MetricCard
-                  icon={IndianRupee}
-                  label={t.expenditure}
-                  value={`₹${formatNumber(districtData?.total_expenditure ?? 0)} Cr`}
-                  color="bg-gradient-to-br from-orange-500 to-orange-600"
-                  info="Total money spent on wages and works"
-               />
-               <MetricCard
-                  icon={Clock}
-                  label={t.avgWage}
-                  value={districtData?.avg_wage_per_day ? `₹${districtData.avg_wage_per_day}` : '-'}
-                  color="bg-gradient-to-br from-pink-500 to-pink-600"
-                  info="Average daily wage paid to workers"
-               />
-               <MetricCard
-                  icon={CheckCircle}
-                  label={t.completion}
-                  value={`${districtData?.work_completion_rate ?? 0}%`}
-                  color="bg-gradient-to-br from-teal-500 to-teal-600"
-                  info="Percentage of works completed on time"
-               />
-            </div>
+         {districtData ? (
+            <div className="max-w-7xl mx-auto px-4 py-8">
+               {/* Key Metrics */}
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                  <MetricCard
+                     icon={Users}
+                     label={t.workers}
+                     value={formatNumber(districtData?.total_workers ?? 0)}
+                     color="bg-gradient-to-br from-blue-500 to-blue-600"
+                     trend={12}
+                     info="Number of workers who got employment"
+                  />
+                  <MetricCard
+                     icon={Briefcase}
+                     label={t.households}
+                     value={formatNumber(districtData?.households_benefited ?? 0)}
+                     color="bg-gradient-to-br from-purple-500 to-purple-600"
+                     trend={8}
+                     info="Families who benefited from MGNREGA"
+                  />
+                  <MetricCard
+                     icon={Calendar}
+                     label={t.workDays}
+                     value={formatNumber(districtData?.person_days ?? 0)}
+                     color="bg-gradient-to-br from-green-500 to-green-600"
+                     trend={15}
+                     info="Total work days provided"
+                  />
+                  <MetricCard
+                     icon={IndianRupee}
+                     label={t.expenditure}
+                     value={`₹${formatNumber(districtData?.total_expenditure.toFixed(2) ?? 0)} Cr`}
+                     color="bg-gradient-to-br from-orange-500 to-orange-600"
+                     info="Total money spent on wages and works"
+                  />
+                  <MetricCard
+                     icon={Clock}
+                     label={t.avgWage}
+                     value={districtData?.avg_wage_per_day ? `₹${districtData.avg_wage_per_day.toFixed(2)}` : '-'}
+                     color="bg-gradient-to-br from-pink-500 to-pink-600"
+                     info="Average daily wage paid to workers"
+                  />
+                  <MetricCard
+                     icon={CheckCircle}
+                     label={t.completion}
+                     value={`${districtData?.work_completion_rate ?? 0}%`}
+                     color="bg-gradient-to-br from-teal-500 to-teal-600"
+                     info="Percentage of works completed on time"
+                  />
+               </div>
 
-            {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-               {/* Monthly Trend */}
+               {/* Charts Section */}
+               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                  {/* Monthly Trend */}
+                  <div className="bg-white rounded-xl shadow-lg p-6">
+                     <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
+                        <TrendingUp className="w-6 h-6 mr-2 text-orange-500" />
+                        {t.trend}
+                     </h3>
+                     <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={historicalData}>
+                           <CartesianGrid strokeDasharray="3 3" />
+                           <XAxis dataKey="month" />
+                           <YAxis />
+                           <Tooltip />
+                           <Line type="monotone" dataKey="workers" stroke="#f97316" strokeWidth={3} name="Workers" />
+                        </LineChart>
+                     </ResponsiveContainer>
+                  </div>
+
+                  {/* Work Status */}
+                  <div className="bg-white rounded-xl shadow-lg p-6">
+                     <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
+                        <Briefcase className="w-6 h-6 mr-2 text-green-500" />
+                        {t.performance}
+                     </h3>
+                     <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={[
+                           { name: language === 'en' ? 'Active' : 'सक्रिय', value: districtData?.active_works ?? 0 },
+                           { name: language === 'en' ? 'Completed' : 'पूर्ण', value: districtData?.completed_works ?? 0 }
+                        ]}>
+                           <CartesianGrid strokeDasharray="3 3" />
+                           <XAxis dataKey="name" />
+                           <YAxis />
+                           <Tooltip />
+                           <Bar dataKey="value" fill="#22c55e" />
+                        </BarChart>
+                     </ResponsiveContainer>
+                  </div>
+               </div>
+
+               {/* Performance Indicators */}
                <div className="bg-white rounded-xl shadow-lg p-6">
-                  <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
-                     <TrendingUp className="w-6 h-6 mr-2 text-orange-500" />
-                     {t.trend}
+                  <h3 className="text-xl font-bold text-gray-900 mb-6">
+                     {language === 'en' ? 'Performance Indicators' : 'प्रदर्शन संकेतक'}
                   </h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                     <LineChart data={historicalData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="month" />
-                        <YAxis />
-                        <Tooltip />
-                        <Line type="monotone" dataKey="workers" stroke="#f97316" strokeWidth={3} name="Workers" />
-                     </LineChart>
-                  </ResponsiveContainer>
-               </div>
-
-               {/* Work Status */}
-               <div className="bg-white rounded-xl shadow-lg p-6">
-                  <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
-                     <Briefcase className="w-6 h-6 mr-2 text-green-500" />
-                     {t.performance}
-                  </h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                     <BarChart data={[
-                        { name: language === 'en' ? 'Active' : 'सक्रिय', value: districtData?.active_works ?? 0 },
-                        { name: language === 'en' ? 'Completed' : 'पूर्ण', value: districtData?.completed_works ?? 0 }
-                     ]}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="value" fill="#22c55e" />
-                     </BarChart>
-                  </ResponsiveContainer>
-               </div>
-            </div>
-
-            {/* Performance Indicators */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-               <h3 className="text-xl font-bold text-gray-900 mb-6">
-                  {language === 'en' ? 'Performance Indicators' : 'प्रदर्शन संकेतक'}
-               </h3>
-               <div className="space-y-4">
-                  <div>
-                     <div className="flex justify-between mb-2">
-                        <span className="font-medium">{language === 'en' ? 'Work Completion' : 'कार्य पूर्णता'}</span>
-                        <span className="font-bold">{districtData?.work_completion_rate ?? 0}%</span>
+                  <div className="space-y-4">
+                     <div>
+                        <div className="flex justify-between mb-2">
+                           <span className="font-medium">{language === 'en' ? 'Work Completion' : 'कार्य पूर्णता'}</span>
+                           <span className="font-bold">{districtData?.work_completion_rate ?? 0}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-4">
+                           <div
+                              className="bg-gradient-to-r from-green-500 to-green-600 h-4 rounded-full transition-all"
+                              style={{ width: `${districtData?.work_completion_rate ?? 0}%` }}
+                           ></div>
+                        </div>
                      </div>
-                     <div className="w-full bg-gray-200 rounded-full h-4">
-                        <div
-                           className="bg-gradient-to-r from-green-500 to-green-600 h-4 rounded-full transition-all"
-                           style={{ width: `${districtData?.work_completion_rate ?? 0}%` }}
-                        ></div>
+                     <div>
+                        <div className="flex justify-between mb-2">
+                           <span className="font-medium">{language === 'en' ? 'Fund Utilization' : 'निधि उपयोग'}</span>
+                           <span className="font-bold">87%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-4">
+                           <div className="bg-gradient-to-r from-orange-500 to-orange-600 h-4 rounded-full" style={{ width: '87%' }}></div>
+                        </div>
                      </div>
-                  </div>
-                  <div>
-                     <div className="flex justify-between mb-2">
-                        <span className="font-medium">{language === 'en' ? 'Fund Utilization' : 'निधि उपयोग'}</span>
-                        <span className="font-bold">87%</span>
-                     </div>
-                     <div className="w-full bg-gray-200 rounded-full h-4">
-                        <div className="bg-gradient-to-r from-orange-500 to-orange-600 h-4 rounded-full" style={{ width: '87%' }}></div>
-                     </div>
-                  </div>
-                  <div>
-                     <div className="flex justify-between mb-2">
-                        <span className="font-medium">{language === 'en' ? 'Timely Payment' : 'समय पर भुगतान'}</span>
-                        <span className="font-bold">92%</span>
-                     </div>
-                     <div className="w-full bg-gray-200 rounded-full h-4">
-                        <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-4 rounded-full" style={{ width: '92%' }}></div>
+                     <div>
+                        <div className="flex justify-between mb-2">
+                           <span className="font-medium">{language === 'en' ? 'Timely Payment' : 'समय पर भुगतान'}</span>
+                           <span className="font-bold">92%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-4">
+                           <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-4 rounded-full" style={{ width: '92%' }}></div>
+                        </div>
                      </div>
                   </div>
                </div>
-            </div>
-         </div>
-
-         {/* Footer */}
-         <div className="bg-gray-900 text-white py-8 mt-12">
-            <div className="max-w-7xl mx-auto px-4 text-center">
-               <p className="text-gray-400">
-                  {language === 'en'
-                     ? 'Data source: Government of India Open Data Platform'
-                     : 'डेटा स्रोत: भारत सरकार ओपन डेटा प्लेटफॉर्म'}
-               </p>
-               <p className="text-gray-400 text-sm mt-2">
-                  {language === 'en'
-                     ? 'Last updated: October 2025'
-                     : 'अंतिम अपडेट: अक्टूबर 2025'}
+            </div >
+         ) : (
+            <div className="flex flex-col items-center justify-center py-10 text-gray-500">
+               <AlertCircle className="w-32 h-32 text-gray-400 mb-3" />
+               <p className="text-lg font-medium">No Data Found</p>
+               <p className="text-sm text-gray-400 mt-1">
+                  Please try selecting another district or timeframe.
                </p>
             </div>
-         </div>
+         )
+         }
       </div>
    );
 };
