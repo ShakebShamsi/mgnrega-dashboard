@@ -9,6 +9,9 @@
 
 ---
 
+<img width="872" height="923" alt="image" src="https://github.com/user-attachments/assets/e613007c-bf64-410e-a972-525b4bc2713e" />
+
+
 ## 📘 Overview
 
 The **MGNREGA Dashboard** is a modern web application that visualizes district-level performance data from the  
