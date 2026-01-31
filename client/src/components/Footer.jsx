@@ -42,8 +42,8 @@ const Footer = () => {
 
             <p className="text-gray-400 text-sm mt-2">
                {language === 'en'
-                  ? 'Last updated: October 2025'
-                  : 'अंतिम अपडेट: अक्टूबर 2025'}
+                  ? 'Last updated: February 2026'
+                  : 'अंतिम अपडेट: फरवरी 2026'}
             </p>
          </div>
       </div>
