@@ -1,40 +1,65 @@
 import { translations } from "../utils/constants";
 import { useLanguage } from "../context/languageContext";
 
-
 const Header = () => {
-   const { language, setLanguage } = useLanguage()
+   const { language, setLanguage } = useLanguage();
    const t = translations[language];
+
    return (
-      <div className="bg-gradient-to-r from-orange-500 to-green-600 text-white shadow-lg">
-         <div className="max-w-7xl mx-auto px-4 py-6">
-            <div className="flex items-center justify-between">
-               <div className="flex items-center space-x-3">
-                  <img src="https://upload.wikimedia.org/wikipedia/commons/5/55/Emblem_of_India.svg" alt="Emblem" className="w-14 h-14 bg-white rounded-full p-1" />
+      <header className="bg-gradient-to-r from-orange-500 via-orange-400 to-green-600 text-white shadow-md">
+         <div className="mx-auto max-w-7xl px-4 py-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+               {/* Left: Emblem & Title */}
+               <div className="flex items-center gap-3">
+                  <img
+                     src="https://upload.wikimedia.org/wikipedia/commons/5/55/Emblem_of_India.svg"
+                     alt="Emblem of India"
+                     className="h-12 w-12 rounded-full bg-white p-1"
+                  />
+
                   <div>
-                     <h1 className="text-2xl md:text-3xl font-bold">{t.title}</h1>
-                     <p className="text-orange-100 text-sm">{t.subtitle}</p>
+                     <h1 className="text-xl font-bold leading-tight sm:text-2xl md:text-3xl">
+                        {t.title}
+                     </h1>
+                     <p className="text-sm text-orange-100">
+                        {t.subtitle}
+                     </p>
                   </div>
                </div>
-               <div className="flex gap-2">
+
+               {/* Right: Language Switch */}
+               <div className="flex items-center gap-2 self-start sm:self-auto">
                   <button
-                     onClick={() => setLanguage('en')}
-                     className={`px-3 py-1 rounded ${language === 'en' ? 'bg-white text-orange-600' : 'bg-orange-600 text-white'}`}
+                     onClick={() => setLanguage("en")}
+                     aria-pressed={language === "en"}
+                     className={`rounded px-3 py-1.5 text-sm font-medium transition
+                ${language === "en"
+                           ? "bg-white text-orange-600 shadow"
+                           : "bg-orange-600/80 hover:bg-orange-600"
+                        }`}
                   >
                      EN
                   </button>
+
                   <button
-                     onClick={() => setLanguage('hi')}
-                     className={`px-3 py-1 rounded ${language === 'hi' ? 'bg-white text-orange-600' : 'bg-orange-600 text-white'}`}
+                     onClick={() => setLanguage("hi")}
+                     aria-pressed={language === "hi"}
+                     className={`rounded px-3 py-1.5 text-sm font-medium transition
+                ${language === "hi"
+                           ? "bg-white text-orange-600 shadow"
+                           : "bg-orange-600/80 hover:bg-orange-600"
+                        }`}
                   >
-                     हिं
+                     हिंदी
                   </button>
                </div>
             </div>
          </div>
-         <hr className="text-gray-300" />
-      </div>
-   )
-}
 
-export default Header
+         <div className="h-px bg-white/30" />
+      </header>
+   );
+};
+
+export default Header;
