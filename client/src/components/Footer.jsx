@@ -3,51 +3,49 @@ import { useLanguage } from "../context/languageContext";
 const Footer = () => {
    const { language } = useLanguage();
 
+   const content = {
+      en: {
+         source: "Data source: Government of India Open Data Platform",
+         madeBy: "Made with",
+         name: "Shakeb Shamsi",
+         updated: "Last updated: February 2026",
+      },
+      hi: {
+         source: "डेटा स्रोत: भारत सरकार ओपन डेटा प्लेटफॉर्म",
+         madeBy: "से बनाया गया",
+         name: "शाकिब शम्सी",
+         updated: "अंतिम अपडेट: फरवरी 2026",
+      },
+   };
+
+   const t = content[language];
+
    return (
-      <div className="bg-gray-900 text-white py-8 mt-12">
-         <div className="max-w-7xl mx-auto px-4 text-center">
-            <p className="text-gray-400">
-               {language === 'en'
-                  ? 'Data source: Government of India Open Data Platform'
-                  : 'डेटा स्रोत: भारत सरकार ओपन डेटा प्लेटफॉर्म'}
-            </p>
-            <p className="text-gray-400 text-sm mt-2">
-               {language === 'en' ? (
-                  <>
-                     Made with ❤️ by{" "}
-                     <a
-                        href="https://shakeb.onrender.com"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-green-300 underline transition-colors"
-                     >
-                        Shakeb Shamsi
-                     </a>
-                  </>
-               ) : (
-                  <>
-                     ❤️ से बनाया गया -{" "}
-                     <a
-                        href="https://shakeb.onrender.com"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-green-300 underline transition-colors"
-                     >
-                        शाकिब शम्सी
-                     </a>{" "}
-                     द्वारा
-                  </>
-               )}
+      <footer className="mt-12 border-t border-gray-800 bg-gray-900 py-8 text-white">
+         <div className="mx-auto max-w-7xl px-4 text-center space-y-2">
+            <p className="text-gray-400 text-sm">{t.source}</p>
+
+            <p className="text-gray-400 text-sm">
+               {t.madeBy}{" "}
+               <span role="img" aria-label="love">
+                  ❤️
+               </span>{" "}
+               {language === "hi" && "–"}{" "}
+               <a
+                  href="https://shakeb.onrender.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-blue-400 underline underline-offset-4 hover:text-green-300 transition-colors"
+               >
+                  {t.name}
+               </a>
+               {language === "hi" && " द्वारा"}
             </p>
 
-            <p className="text-gray-400 text-sm mt-2">
-               {language === 'en'
-                  ? 'Last updated: February 2026'
-                  : 'अंतिम अपडेट: फरवरी 2026'}
-            </p>
+            <p className="text-gray-500 text-xs">{t.updated}</p>
          </div>
-      </div>
-   )
-}
+      </footer>
+   );
+};
 
 export default Footer;
